@@ -70,7 +70,16 @@
   #tagHeat { color: #ffb347; }
   .legend .ramp { height: 10px; width: 170px; border-radius: 5px; margin: 6px 0 3px; }
   .legend .ends { display: flex; justify-content: space-between; font: 400 11px "Space Mono", monospace; }
-  .note { padding: 7px 18px; font-size: 11px; line-height: 1.45; background: #0a1c10; color: rgba(240,244,220,.75); }
+  .toggles { display: flex; gap: 12px; flex-wrap: wrap; }
+  .seg .sm { display: none; }
+  .note { padding: 6px 18px; font-size: 11px; line-height: 1.45; background: #0a1c10; color: rgba(240,244,220,.75); }
+  .note summary { cursor: pointer; font: 500 11px "Outfit", sans-serif; color: var(--leaf); list-style: none; }
+  .note summary::-webkit-details-marker { display: none; }
+  .note summary::after { content: " ▾"; }
+  .note[open] summary { margin-bottom: 4px; }
+  .note[open] summary::after { content: " ▴"; }
+  .alert:empty { display: none; }
+  .alert { padding: 6px 18px; font-size: 11px; background: #3a1a12; color: #ffd9c9; }
   .note a { color: var(--leaf); }
 
   /* District number labels on the map */
@@ -92,17 +101,26 @@
   .leaflet-container a.leaflet-popup-close-button { color: var(--beige); }
 
   @media (max-width: 640px) {
-    .bar { padding: 12px; gap: 10px 12px; }
-    .bar h1 { flex-basis: 100%; font-size: 16px; }
-    .slider { flex-basis: 100%; }
-    .year { font-size: 22px; min-width: 62px; }
-    .seg button { padding: 7px 10px; font-size: 12px; }
+    /* Phone header: title + citywide figure, then both toggles side by side, then the timeline. */
+    .bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 12px; padding: 12px; }
+    .bar h1 { grid-column: 1; grid-row: 1; font-size: 17px; align-self: center; }
+    .stat { grid-column: 2; grid-row: 1; text-align: right; font-size: 10px; }
+    .stat b { font-size: 18px; }
+    .toggles { grid-column: 1 / -1; grid-row: 2; flex-wrap: nowrap; gap: 8px; }
+    .toggles .seg { flex: 1; }
+    .seg button { flex: 1; padding: 8px 6px; font-size: 12px; white-space: nowrap; }
+    .seg .lg { display: none; } .seg .sm { display: inline; }
+    .slider { grid-column: 1 / -1; grid-row: 3; gap: 8px; }
+    .year { font-size: 22px; min-width: 58px; }
+    .play { width: 32px; height: 32px; }
+    .tag { font-size: 9px; padding: 2px 6px; }
+    .leaflet-control-attribution { font-size: 8px !important; line-height: 1.3; }
     .legend { bottom: 34px; padding: 7px 9px; max-width: 46%; font-size: 11px; }
     #legCanopy { left: 8px; } #legHeat { right: 8px; }
-    .legend .cap { font-size: 10px; }
-    .capA { display: none; }
     .sidetag { font-size: 11px; padding: 5px 9px; }
-    .note { font-size: 10px; padding: 6px 12px; }
+    .note, .alert { font-size: 10px; padding: 5px 12px; }
+    .legend .cap { display: none; }
+    #legHeat > div:first-child, #legendTitle { font-size: 10px; }
     .legend .ramp, .legend .blocks { width: 100%; }
   }
 </style>
@@ -117,13 +135,15 @@
       <input id="year" type="range" min="2018" max="2050" step="1" value="2022" aria-label="Year">
       <span class="tag" id="kind">Measured</span>
     </div>
-    <div class="seg" id="modeSeg" role="group" aria-label="Layer">
-      <button data-mode="canopy" class="on">Canopy cover</button>
-      <button data-mode="change">Change 2018–22</button>
-    </div>
-    <div class="seg" id="scenSeg" role="group" aria-label="2050 scenario">
-      <button data-scen="current" class="on">Current pace</button>
-      <button data-scen="goal">50% goal</button>
+    <div class="toggles">
+      <div class="seg" id="modeSeg" role="group" aria-label="Layer">
+        <button data-mode="canopy" class="on"><span class="lg">Canopy cover</span><span class="sm">Canopy</span></button>
+        <button data-mode="change"><span class="lg">Change 2018–22</span><span class="sm">Change</span></button>
+      </div>
+      <div class="seg" id="scenSeg" role="group" aria-label="2050 scenario">
+        <button data-scen="current" class="on"><span class="lg">Current pace</span><span class="sm">Current</span></button>
+        <button data-scen="goal">50% goal</button>
+      </div>
     </div>
     <div class="stat">Citywide canopy<b id="city">47.3%</b></div>
   </div>
@@ -145,7 +165,8 @@
       <div class="cap"><span class="capA">Share of each neighborhood's land that is hotter than the city average.<br></span><span id="heatProj" style="display:none">Projected: each canopy point lost ≈ <b id="slope">+1.2</b> pts of hot land.<br></span>Less canopy → more hot land: <b id="corr">r = −0.65</b> across <span id="corrN">362</span> neighborhoods <span id="corrNote"></span>.</div>
     </div>
   </div>
-  <div class="note" id="note">
+  <div class="alert" id="alert"></div>
+  <details class="note" id="note"><summary>About the data &amp; sources</summary>
     Data: Charlotte Urban Tree Canopy Assessment (PlanIT Geo for TreesCharlotte &amp; City of Charlotte, Nov 2023), measured 2018 and 2022.
     Boundaries: City of Charlotte City Council Districts and Neighborhood Profile Areas (City of Charlotte GIS).
     Neighborhood colors: tree canopy from the Charlotte-Mecklenburg Quality of Life Explorer (2023); earlier years follow each district's measured trend.
@@ -157,7 +178,7 @@
     Heat: Trust for Public Land, Heat Severity – USA, yearly editions 2019–2023 (Landsat 8 surface temperature, 30 m).
     Each edition ranks heat relative to that year's city average, so it shows where heat concentrates, not absolute warming.
     2018 uses the 2019 edition (summers 2018–19). District and neighborhood heat shares were calculated from these layers for this map.
-  </div>
+  </details>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -313,7 +334,7 @@ L.tileLayer(LABELS_URL, { maxNativeZoom: 16, maxZoom: 18, pane: "labels", opacit
 
 let tileErrors = 0;
 base.on("tileerror", () => {
-  if (++tileErrors === 3) document.getElementById("note").insertAdjacentHTML("afterbegin",
+  if (++tileErrors === 3) document.getElementById("alert").insertAdjacentHTML("beforeend",
     "<b>The basemap couldn't load (check your connection). The district colors still work.</b> ");
 });
 
@@ -390,7 +411,7 @@ async function loadNeighborhoods() {
     hit.setStyle({ color: "#0f2818", weight: 2.2, opacity: .9 });
     render();
   } catch (err) {
-    document.getElementById("note").insertAdjacentHTML("afterbegin",
+    document.getElementById("alert").insertAdjacentHTML("beforeend",
       "<b>Neighborhood shapes couldn't load right now, so colors are shown by district.</b> ");
   }
 }
@@ -439,7 +460,8 @@ function render() {
     ? "linear-gradient(90deg," + CANOPY_PALETTE.map((c, i, a) => `${c} ${100 * i / a.length}% ${100 * (i + 1) / a.length}%`).join(",") + ")"
     : "linear-gradient(90deg," + s.stops.map(x => x[1]).join(",") + ")";
   document.getElementById("legendTitle").textContent = s.title;
-  document.getElementById("tagCanopy").textContent = mode === "canopy" ? "◀ Tree canopy" : "◀ Canopy change";
+  const narrow = map.getSize().x < 600;
+  document.getElementById("tagCanopy").textContent = mode === "canopy" ? (narrow ? "◀ Canopy" : "◀ Tree canopy") : (narrow ? "◀ Change" : "◀ Canopy change");
   document.getElementById("lo").textContent = s.lo;
   document.getElementById("hi").textContent = s.hi;
 
@@ -477,7 +499,10 @@ function updateHeat() {
   const proj = projectedHeat();
   document.getElementById("heatTitle").textContent = proj
     ? `Surface heat · ${year} projection` : "Surface heat · " + HEAT_SOURCE[hy];
-  document.getElementById("tagHeat").textContent = proj ? `Surface heat ${year} (projected) ▶` : `Surface heat ${hy} ▶`;
+  const narrowH = map.getSize().x < 600;
+  document.getElementById("tagHeat").textContent = narrowH
+    ? (proj ? `Heat ${year}* ▶` : `Heat ${hy} ▶`)
+    : (proj ? `Surface heat ${year} (projected) ▶` : `Surface heat ${hy} ▶`);
   document.getElementById("heatProj").style.display = proj ? "" : "none";
   const ids = Object.keys(NPA), xs = ids.map(i => NPA[i].c), ys = ids.map(i => NPA[i].h[hy]);
   document.getElementById("corrN").textContent = ids.length;
@@ -566,7 +591,7 @@ render();
 clipPanes();
 loadNeighborhoods();
 setTimeout(() => { map.invalidateSize(); map.fitBounds(geo.getBounds(), { padding: [12, 12] }); clipPanes(); }, 300); // fixes sizing inside embeds
-window.addEventListener("resize", () => map.invalidateSize());
+window.addEventListener("resize", () => { map.invalidateSize(); render(); });
 </script>
 </body>
 </html>
